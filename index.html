@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Login</title>
+  <title>ESP32-S3 Camera Monitor</title>
 
   <style>
     body {
-      font-family: Arial;
+      font-family: Arial, sans-serif;
       background: linear-gradient(135deg, #2b5876, #4e4376);
-      height: 100vh;
+      min-height: 100vh;
       display: flex;
       justify-content: center;
       align-items: center;
@@ -19,7 +19,8 @@
     .box {
       background: white;
       padding: 30px;
-      width: 320px;
+      width: 90%;
+      max-width: 400px;
       border-radius: 12px;
       box-shadow: 0px 8px 20px rgba(0,0,0,0.3);
       text-align: center;
@@ -31,6 +32,7 @@
       margin: 8px 0;
       border-radius: 8px;
       border: 1px solid #ccc;
+      box-sizing: border-box;
     }
 
     button {
@@ -42,64 +44,111 @@
       border: none;
       border-radius: 8px;
       cursor: pointer;
+      font-weight: bold;
     }
 
     button:hover {
       background: #2b5876;
     }
 
-    p {
+    /* สไตล์สำหรับส่วนแสดงรูป */
+    #camera-container {
+      display: none; /* ซ่อนไว้ก่อน login */
+      margin-top: 20px;
+    }
+
+    #camera-view {
+      width: 100%;
+      border-radius: 8px;
+      border: 2px solid #4e4376;
+      margin-top: 10px;
+    }
+
+    #msg {
       margin-top: 15px;
       font-size: 14px;
     }
+
+    .status-dot {
+      height: 10px;
+      width: 10px;
+      background-color: #bbb;
+      border-radius: 50%;
+      display: inline-block;
+      margin-right: 5px;
+    }
+    .online { background-color: #4CAF50; }
   </style>
 </head>
 <body>
 
   <div class="box">
-    <h2>Login kuyfiw</h2>
+    <div id="login-form">
+      <h2>Camera Login</h2>
+      <input type="text" id="username" placeholder="Username">
+      <input type="password" id="password" placeholder="Password">
+      <button onclick="login()">เข้าสู่ระบบ</button>
+    </div>
 
-    <input type="text" id="username" placeholder="Username">
-    <input type="password" id="password" placeholder="Password">
-
-    <button onclick="login()">เข้าสู่ระบบ</button>
+    <div id="camera-container">
+      <h3>Live View</h3>
+      <div><span class="status-dot online"></span><small>Connected to Cloudflare</small></div>
+      <img id="camera-view" src="" alt="Latest Camera Image">
+      <button onclick="refreshImage()" style="background: #2b5876; font-size: 12px;">ดึงรูปใหม่</button>
+      <button onclick="location.reload()" style="background: #ccc; color: #333; font-size: 12px;">Logout</button>
+    </div>
 
     <p id="msg"></p>
   </div>
 
   <script>
+    // ❗ เปลี่ยนเป็น URL ของ Worker ของคุณ
+    const WORKER_URL = "https://my-login-backend.testweb4594.workers.dev";
+
     async function login() {
       const user = document.getElementById("username").value;
       const pass = document.getElementById("password").value;
       const msg = document.getElementById("msg");
 
-      // ❗ แก้ URL ให้เป็น Worker ของคุณ
-      const API_URL = "https://my-login-backend.testweb4594.workers.dev";
+      try {
+        const res = await fetch(`${WORKER_URL}/login`, { // ระบุ path /login
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username: user, password: pass })
+        });
 
-      const res = await fetch(API_URL, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          username: user,
-          password: pass
-        })
-      });
+        const data = await res.json();
 
-      const data = await res.json();
+        if (data.success) {
+          msg.style.color = "green";
+          msg.innerText = "Login สำเร็จ!";
+          
+          // ซ่อนฟอร์ม login และแสดงส่วนกล้อง
+          document.getElementById("login-form").style.display = "none";
+          document.getElementById("camera-container").style.display = "block";
+          
+          // เริ่มโหลดรูปภาพ
+          refreshImage();
+          
+          // ตั้งเวลาให้โหลดรูปใหม่ทุก 5 วินาทีอัตโนมัติ
+          setInterval(refreshImage, 5000);
 
-      if (data.success) {
-        msg.style.color = "green";
-        msg.innerText = "Login สำเร็จ! Token: " + data.token;
-      } else {
+        } else {
+          msg.style.color = "red";
+          msg.innerText = "เข้าสู่ระบบไม่สำเร็จ: " + data.message;
+        }
+      } catch (err) {
         msg.style.color = "red";
-        msg.innerText = "Login ไม่สำเร็จ: " + data.message;
+        msg.innerText = "เกิดข้อผิดพลาดในการเชื่อมต่อ Server";
       }
+    }
+
+    function refreshImage() {
+      const img = document.getElementById("camera-view");
+      // เติม ?t=... เพื่อป้องกัน browser จำภาพเก่า (Cache)
+      img.src = `${WORKER_URL}/photo?t=${new Date().getTime()}`;
     }
   </script>
 
 </body>
 </html>
-
-
